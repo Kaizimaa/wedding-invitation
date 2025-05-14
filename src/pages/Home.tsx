@@ -200,7 +200,7 @@ const EventCard = styled(Paper)(({ theme }) => ({
 
 const Home = () => {
   const { trackEvent } = useAnalytics();
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(true);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [audioLoaded, setAudioLoaded] = useState(false);
   const theme = useTheme();
@@ -208,85 +208,78 @@ const Home = () => {
 
   // Initialize audio
   useEffect(() => {
-    audioRef.current = new Audio('/music/kamulah-takdirku.mp3');
-    audioRef.current.loop = true;
-    
-    // Handle audio loaded
-    audioRef.current.addEventListener('loadeddata', () => {
-      setAudioLoaded(true);
-      handleAutoplay();
-    });
-
-    // Handle page visibility change
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        audioRef.current?.pause();
-        setIsPlaying(false);
-      } else if (audioLoaded && isPlaying) {
-        audioRef.current?.play();
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    // Cleanup
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, []);
-
-  // Handle autoplay
-  const handleAutoplay = async () => {
-    try {
-      if (audioRef.current) {
-        await audioRef.current.play();
-        setIsPlaying(true);
-        trackEvent('music_autoplay_success');
-        
-        // Add user interaction listener only if autoplay fails
-        const handleUserInteraction = async () => {
-          if (audioRef.current && !isPlaying) {
-            await audioRef.current.play();
-            setIsPlaying(true);
-          }
-          // Remove listener after successful play
-          ['click', 'touchstart'].forEach(event => 
-            document.removeEventListener(event, handleUserInteraction)
-          );
-        };
-
-        ['click', 'touchstart'].forEach(event => 
-          document.addEventListener(event, handleUserInteraction)
-        );
-      }
-    } catch (error) {
-      console.log('Autoplay prevented. Waiting for user interaction.');
-      setIsPlaying(false);
-      trackEvent('music_autoplay_failed');
+    const setupAudio = () => {
+      audioRef.current = new Audio('/music/kamulah-takdirku.mp3');
+      audioRef.current.loop = true;
+      audioRef.current.autoplay = true;
       
-      // Add user interaction listener
-      const handleUserInteraction = async () => {
-        if (audioRef.current && !isPlaying) {
-          try {
-            await audioRef.current.play();
-            setIsPlaying(true);
-            // Remove listener after successful play
-            ['click', 'touchstart'].forEach(event => 
-              document.removeEventListener(event, handleUserInteraction)
-            );
-          } catch (error) {
-            console.log('Playback failed:', error);
-          }
+      // Handle audio loaded
+      audioRef.current.addEventListener('loadeddata', () => {
+        setAudioLoaded(true);
+        tryPlayAudio();
+      });
+
+      // Handle page visibility change
+      const handleVisibilityChange = () => {
+        if (document.hidden) {
+          audioRef.current?.pause();
+        } else if (audioLoaded && isPlaying) {
+          tryPlayAudio();
         }
       };
 
-      ['click', 'touchstart'].forEach(event => 
-        document.addEventListener(event, handleUserInteraction)
-      );
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+
+      // Try to play immediately
+      tryPlayAudio();
+
+      // Cleanup
+      return () => {
+        if (audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current.remove();
+          audioRef.current = null;
+        }
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      };
+    };
+
+    // Setup audio on first user interaction
+    const handleFirstInteraction = () => {
+      setupAudio();
+      document.removeEventListener('click', handleFirstInteraction);
+      document.removeEventListener('touchstart', handleFirstInteraction);
+    };
+
+    // Add listeners for first interaction
+    document.addEventListener('click', handleFirstInteraction);
+    document.addEventListener('touchstart', handleFirstInteraction);
+
+    // Initial setup
+    setupAudio();
+
+    // Cleanup
+    return () => {
+      document.removeEventListener('click', handleFirstInteraction);
+      document.removeEventListener('touchstart', handleFirstInteraction);
+    };
+  }, []);
+
+  // Function to try playing audio
+  const tryPlayAudio = async () => {
+    if (!audioRef.current) return;
+
+    try {
+      const playPromise = audioRef.current.play();
+      if (playPromise instanceof Promise) {
+        await playPromise;
+        setIsPlaying(true);
+        trackEvent('music_autoplay_success');
+      }
+    } catch (error: unknown) {
+      console.log('Playback failed:', error instanceof Error ? error.message : 'Unknown error');
+      setIsPlaying(false);
+      trackEvent('music_autoplay_failed');
     }
   };
 
@@ -304,27 +297,10 @@ const Home = () => {
         setIsPlaying(true);
         trackEvent('music_play');
       }
-    } catch (error) {
-      console.log('Playback failed:', error);
+    } catch (error: unknown) {
+      console.log('Playback failed:', error instanceof Error ? error.message : 'Unknown error');
     }
   };
-
-  // Update audio play state when isPlaying changes
-  useEffect(() => {
-    if (audioRef.current) {
-      if (isPlaying) {
-        const playPromise = audioRef.current.play();
-        if (playPromise !== undefined) {
-          playPromise.catch(error => {
-            console.log('Playback prevented:', error);
-            setIsPlaying(false);
-          });
-        }
-      } else {
-        audioRef.current.pause();
-      }
-    }
-  }, [isPlaying]);
 
   // Track map interactions
   const handleMapClick = () => {
@@ -541,7 +517,7 @@ const Home = () => {
                 mb: 3 
               }}>
                 <iframe
-                  src="https://www.google.com/maps/embed?pb=!1m14!1m8!1m3!1d506557.5502064972!2d107.7826889!3d-7.2997466!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x2e6f5feac758dbff%3A0x2ed2c0003e28987c!2sThe%20Priangan%20Boutique%20Hotel!5e0!3m2!1sid!2sid!4v1747191211687!5m2!1sid!2sid"
+                  src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3957.254306307414!2d108.35657827404198!3d-7.325307572037116!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x2e6f5eed1dd7dc55%3A0x269b6e1d30af5ca8!2sThe%20Priangan%20Boutique%20Hotel%20%40%20Yos%20Sudarso!5e0!3m2!1sid!2sid!4v1747198781210!5m2!1sid!2sid"
                   width="100%"
                   height="100%"
                   style={{ border: 0 }}
@@ -560,7 +536,7 @@ const Home = () => {
                   fontSize: isMobile ? '1.5rem' : '2rem'
                 }}
               >
-                The Priangan Boutique Hotel
+                The Priangan Boutique Hotel @ Yos Sudarso
               </Typography>
               
               <Typography 
@@ -571,11 +547,11 @@ const Home = () => {
                   fontSize: isMobile ? '0.9rem' : '1rem'
                 }}
               >
-                Jl. Jend. Sudirman No.379, Sindangrasa,
+                Jl. Yos Sudarso No.92, Ciamis 
                 <br />
                 Kec. Ciamis, Kabupaten Ciamis,
                 <br />
-                Jawa Barat 46219
+                Jawa Barat 46211
               </Typography>
               
               <motion.div
