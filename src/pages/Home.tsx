@@ -19,6 +19,7 @@ import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import MusicNoteIcon from '@mui/icons-material/MusicNote';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import { TypographyProps } from '@mui/material';
+import { useAnalytics } from '../hooks/useAnalytics';
 
 const CoverImage = styled(Box)({
   height: '100vh',
@@ -198,6 +199,7 @@ const EventCard = styled(Paper)(({ theme }) => ({
 }));
 
 const Home = () => {
+  const { trackEvent } = useAnalytics();
   const [isPlaying, setIsPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [audioLoaded, setAudioLoaded] = useState(false);
@@ -241,9 +243,9 @@ const Home = () => {
   const handleAutoplay = async () => {
     try {
       if (audioRef.current) {
-        // Try to play
         await audioRef.current.play();
         setIsPlaying(true);
+        trackEvent('music_autoplay_success');
         
         // Add user interaction listener only if autoplay fails
         const handleUserInteraction = async () => {
@@ -264,6 +266,7 @@ const Home = () => {
     } catch (error) {
       console.log('Autoplay prevented. Waiting for user interaction.');
       setIsPlaying(false);
+      trackEvent('music_autoplay_failed');
       
       // Add user interaction listener
       const handleUserInteraction = async () => {
@@ -295,9 +298,11 @@ const Home = () => {
       if (isPlaying) {
         audioRef.current.pause();
         setIsPlaying(false);
+        trackEvent('music_pause');
       } else {
         await audioRef.current.play();
         setIsPlaying(true);
+        trackEvent('music_play');
       }
     } catch (error) {
       console.log('Playback failed:', error);
@@ -320,6 +325,13 @@ const Home = () => {
       }
     }
   }, [isPlaying]);
+
+  // Track map interactions
+  const handleMapClick = () => {
+    trackEvent('map_click', {
+      location: 'The Priangan Boutique Hotel'
+    });
+  };
 
   return (
     <Box>
@@ -587,6 +599,7 @@ const Home = () => {
                       background: 'linear-gradient(45deg, #FF69B4 30%, #FF1493 90%)',
                     }
                   }}
+                  onClick={handleMapClick}
                 >
                   Buka di Google Maps
                 </Button>
